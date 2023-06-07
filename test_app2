@@ -1,0 +1,125 @@
+import tkinter as tk
+from tkinter import filedialog
+import os
+from openpyxl import load_workbook
+from PIL import Image, ImageTk
+
+root = tk.Tk()
+root.title("Product Display")
+
+# Construct the directory path
+directory_path = os.path.expanduser("~/Downloads/jojo")
+
+# Example usage: reading an Excel file in the directory
+file_path = os.path.join(directory_path, "Book1.xlsx")
+workbook = load_workbook(file_path)
+sheet = workbook.active
+
+# Create a canvas for the main window
+canvas = tk.Canvas(root)
+canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+# Create a scrollbar for the canvas
+scrollbar = tk.Scrollbar(root, orient=tk.VERTICAL, command=canvas.yview)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+# Configure the canvas to use the scrollbar
+canvas.configure(yscrollcommand=scrollbar.set)
+canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+# Create a frame inside the canvas to hold the widgets
+frame = tk.Frame(canvas)
+canvas.create_window((0, 0), window=frame, anchor="nw")
+
+# Get the maximum row count in the Excel sheet
+max_row = sheet.max_row
+
+# Create lists to store the labels and entries
+qty_labels = []
+qty_entries = []
+calculated_price_labels = []
+
+def calculate_price():
+    total_price = 0
+    for row in range(2, max_row + 1):
+        price = sheet.cell(row=row, column=4).value
+        qty = int(qty_entries[row-2].get())  # Get the quantity from the corresponding entry
+
+        # Calculate the item price
+        item_price = price * qty
+        total_price += item_price
+
+        # Update the quantity label
+        qty_label = qty_labels[row-2]
+        qty_label.config(text=qty)
+
+        # Update the calculated price label
+        calculated_price_label = calculated_price_labels[row-2]
+        calculated_price_label.config(text=item_price)
+
+        # Update the quantity in the Excel sheet
+        sheet.cell(row=row, column=5).value = qty
+
+    # Display the total price
+    total_price_label.config(text="Total Price: {}".format(total_price))
+    # Save the updated workbook
+    workbook.save(file_path)
+
+def load_excel_file():
+    # Loop through each row in the Excel sheet (excluding the header row)
+    for row in range(2, max_row + 1):
+        name = sheet.cell(row=row, column=2).value
+        price = sheet.cell(row=row, column=4).value
+        qty = sheet.cell(row=row, column=5).value
+        image_path = sheet.cell(row=row, column=3).value
+
+        # Create labels for name, price, and quantity
+        name_label = tk.Label(frame, text=name)
+        price_label = tk.Label(frame, text=price)
+        qty_label = tk.Label(frame, text=qty)
+        calculated_price_label = tk.Label(frame, text="")
+
+        # Create entry for quantity
+        qty_entry = tk.Entry(frame)
+        qty_entry.insert(0, "0")  # Set the default value to 0
+
+        # Add the labels and entry to the respective lists
+        qty_labels.append(qty_label)
+        qty_entries.append(qty_entry)
+        calculated_price_labels.append(calculated_price_label)
+
+        image = Image.open(image_path)
+        image = image.resize((100, 100))  # Adjust the size as needed
+        photo = ImageTk.PhotoImage(image)
+
+        image_label = tk.Label(frame, image=photo)
+        image_label.image = photo  # Store the photo object as an attribute of the label
+
+        name_label.grid(row=row, column=0, sticky="nsew")
+        price_label.grid(row=row, column=1, sticky="nsew")
+        qty_label.grid(row=row, column=2, sticky="nsew")
+        qty_entry.grid(row=row, column=3, sticky="nsew")
+        image_label.grid(row=row, column=4, sticky="nsew")
+        calculated_price_label.grid(row=row, column=5, sticky="nsew")
+
+        # Configure column and row weights to make the widgets adjustable
+        frame.columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        frame.rowconfigure(row, weight=1)
+
+    # Create and place the Calculate button
+    calculate_button = tk.Button(frame, text="Calculate", command=calculate_price)
+    calculate_button.grid(row=max_row + 1, column=0, sticky="nsew")
+
+    # Create and place the total price label
+    global total_price_label
+    total_price_label = tk.Label(frame, text="")
+    total_price_label.grid(row=max_row + 1, column=1, sticky="nsew")
+
+    # Store the total price label as a global variable
+    total_price_label = total_price_label
+
+# Load the Excel file and display the items
+load_excel_file()
+
+# Start the main event loop
+frame.mainloop()

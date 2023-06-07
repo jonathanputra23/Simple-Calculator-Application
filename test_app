@@ -1,0 +1,229 @@
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import filedialog
+import os
+from openpyxl import load_workbook, Workbook
+from PIL import Image, ImageTk
+import datetime
+from openpyxl.styles import NamedStyle
+
+# Create the main window
+root = tk.Tk()
+root.title("JOYFULLYSCRIBBLED STORE!")
+root.attributes("-fullscreen", True)  # Start in full screen
+
+# Create a canvas for the main window
+canvas = tk.Canvas(root)
+canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+# Create a scrollbar for the canvas
+scrollbar = tk.Scrollbar(root, orient=tk.VERTICAL, command=canvas.yview)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+# Configure the canvas to use the scrollbar
+canvas.configure(yscrollcommand=scrollbar.set)
+canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+# Create a frame inside the canvas to hold the widgets
+frame = tk.Frame(canvas)
+canvas.create_window((0, 0), window=frame, anchor="nw")
+
+
+# Set the directory path and Excel file path
+directory_path = os.path.expanduser("C:\\Users\\jonat\\Downloads\\jojo\\jojo")
+file_path = os.path.join(directory_path, "Book1.xlsx")
+
+# Global variables
+pay_button = None
+max_row=0
+qty_labels = []
+qty_entries = []
+calculated_price_labels = []
+image_labels = []
+total_price_label = None
+total_price = 0
+
+# Read the Excel file
+workbook = load_workbook(file_path)
+sheet = workbook.active
+max_row = sheet.max_row
+
+def checkCart():
+    allZero = False
+    qtyAvail = True
+    isValid = True
+    try:
+        for row in range(max_row-1):
+            # print(qty_entries[row].get() )
+            if int(qty_entries[row].get())!= 0:
+                allZero = True
+            if int(qty_entries[row].get())>sheet.cell(row=row+2, column=5).value:
+                qtyAvail = False
+    except ValueError:
+        isValid = False
+        return allZero,qtyAvail, isValid
+    return allZero, qtyAvail, isValid
+    
+def calculate_price():
+    global total_price
+    is_zero, is_avail, is_valid = checkCart()
+    if is_valid==False:
+        messagebox.showerror("Error", "Invalid quantity input")
+        return
+    if is_zero==False:
+        messagebox.showwarning("Warning", "All item qty is 0")
+        return
+    if is_avail==False:
+        messagebox.showwarning("Warning", "Stock is not enough")
+        return
+    
+
+    for row in range(2, max_row + 1):
+        price = sheet.cell(row=row, column=4).value
+        qty_entry = qty_entries[row - 2]
+        qty = int(qty_entry.get())
+        
+        item_price = price * qty
+        total_price += item_price
+
+        calculated_price_label = calculated_price_labels[row - 2]
+        calculated_price_label.config(text=item_price)
+
+    text_total = "TOTAL: " + str(total_price)
+    total_price_label.config(text=text_total)
+    messagebox.showinfo("Calculated!", f"Total is {text_total}")
+    total_price = 0
+
+def pay():
+    # Create or load the transaction record Excel file
+    transaction_file_path = os.path.join(directory_path, "Transaction.xlsx")
+    if os.path.exists(transaction_file_path):
+        transaction_workbook = load_workbook(transaction_file_path)
+        transaction_sheet = transaction_workbook.active
+    else:
+        transaction_workbook = Workbook()
+        transaction_sheet = transaction_workbook.active
+        transaction_sheet.cell(row=1, column=1).value = "Product Name"
+        transaction_sheet.cell(row=1, column=2).value = "Price"
+        transaction_sheet.cell(row=1, column=3).value = "Quantity"
+        transaction_sheet.cell(row=1, column=4).value = "Subtotal"
+        transaction_sheet.cell(row=1, column=5).value = "Date Time"
+
+
+    next_row = transaction_sheet.max_row + 1  # Get the next available row
+
+    for row in range(2, max_row +1):
+        prefix_name = sheet.cell(row=row, column=1).value
+        name = sheet.cell(row=row, column=2).value
+        price = sheet.cell(row=row, column=4).value
+        qty = int(qty_entries[row-2].get())  # Get the quantity from the corresponding entry
+        if(qty!=0):
+            # Write transaction details to the next available row in the transaction record Excel file
+            transaction_sheet.cell(row=next_row, column=1).value = prefix_name + " "+name
+            transaction_sheet.cell(row=next_row, column=2).value = price
+            transaction_sheet.cell(row=next_row, column=3).value = qty
+            transaction_sheet.cell(row=next_row, column=4).value = price*qty
+            current_datetime = datetime.datetime.now()
+            formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+            transaction_sheet.cell(row=next_row, column=5).value = formatted_datetime
+            next_row += 1  # Increment the next available row
+
+            # Update the quantity in the original Excel file
+            sheet.cell(row=row, column=5).value -= qty
+
+            # Update the quantity label in the GUI
+            # qty_label = qty_labels[row-2]
+            # qty_label.config(text=sheet.cell(row=row, column=5).value)
+
+    # Save the transaction record and the original Excel files
+    transaction_workbook.save(transaction_file_path)
+    workbook.save(file_path)
+    messagebox.showinfo("Success!", "Transaction successfully saved!")
+    reset_all()
+
+def load_excel_file():
+    # Loop through each row in the Excel sheet (excluding the header row)
+    for row in range(2, max_row + 1):
+        prefix_name = sheet.cell(row=row, column=1).value
+        name = sheet.cell(row=row, column=2).value
+        price = sheet.cell(row=row, column=4).value
+        qty = sheet.cell(row=row, column=5).value
+        image_path = sheet.cell(row=row, column=3).value
+
+        # Create labels for name, price, and quantity
+        name_label = tk.Label(frame, text=prefix_name + " " + name)
+        price_label = tk.Label(frame, text=price)
+        qty_label = tk.Label(frame, text="")
+        calculated_price_label = tk.Label(frame, text="")
+
+        # Create entry for quantity
+        qty_entry = tk.Entry(frame)
+        qty_entry.insert(tk.END, "0")  # Set default value or placeholder text
+
+
+        # Add the labels and entry to the respective lists
+        qty_labels.append(qty_label)
+        qty_entries.append(qty_entry)
+        calculated_price_labels.append(calculated_price_label)
+
+        print(image_path)
+        # Load and resize the image
+        image = Image.open(image_path)
+        image = image.resize((100, 100))  # Adjust the size as needed
+        photo = ImageTk.PhotoImage(image)
+
+        # Create and display the image label
+        image_label = tk.Label(frame, image=photo)
+        image_label.image = photo  # Store the photo object as an attribute of the label
+        image_labels.append(image_label)
+
+        if row%2!=0:
+            # Grid placement of widgets
+            name_label.grid(row=row-1, column=6, padx=10, pady=5)
+            price_label.grid(row=row-1, column=7, padx=10, pady=5)
+            qty_label.grid(row=row-1, column=8, padx=10, pady=5)
+            qty_entry.grid(row=row-1, column=9, padx=10, pady=5)
+            image_label.grid(row=row-1, column=10, padx=10, pady=5)
+            calculated_price_label.grid(row=row-1, column=11, padx=10, pady=5)
+        else:
+            # Grid placement of widgets
+            name_label.grid(row=row, column=0, padx=10, pady=5)
+            price_label.grid(row=row, column=1, padx=10, pady=5)
+            qty_label.grid(row=row, column=2, padx=10, pady=5)
+            qty_entry.grid(row=row, column=3, padx=10, pady=5)
+            image_label.grid(row=row, column=4, padx=10, pady=5)
+            calculated_price_label.grid(row=row, column=5, padx=10, pady=5)
+
+    # Create and place the Calculate button
+    calculate_button = tk.Button(frame, text="Calculate", command=calculate_price)
+    calculate_button.grid(row=max_row + 1, column=0, padx=10, pady=10)
+
+    # Create and place the Pay button
+    pay_button = tk.Button(frame, text="Pay", command=pay)
+    pay_button.grid(row=max_row + 1, column=3, padx=10, pady=10)
+
+    # Create and place the total price label
+    global total_price_label
+    total_price_label = tk.Label(frame, text="", font=("Arial", 12, "bold"))
+    total_price_label.grid(row=max_row + 1, column=1, padx=10, pady=10)
+
+def reset_all():
+    global total_price
+    # Clear the quantity entries
+    for entry in qty_entries:
+        entry.delete(0, tk.END)
+        entry.insert(0, "0")  # Set the default value to 0
+
+    # Reset the calculated price labels
+    for label in calculated_price_labels:
+        label.config(text="")
+
+    # Reset the total price label
+    total_price_label.config(text="")
+    total_price = 0
+
+# Load the Excel file and display the items
+load_excel_file()
+
+# Start the main event loop
+frame.mainloop()
